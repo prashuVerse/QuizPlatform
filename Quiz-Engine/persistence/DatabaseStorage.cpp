@@ -347,13 +347,11 @@ void DatabaseStorage::saveAttempt(const Attempt& attempt, int student_id, int su
 
         // 4. Insert Score 
         sql::PreparedStatement* pstmt3 = con->prepareStatement(
-            "INSERT INTO Personal_Result(student_id, sub_id, score) VALUES (?, ?, ?) "
-            "ON DUPLICATE KEY UPDATE score=?"
+            "INSERT INTO Personal_Result(student_id, sub_id, score) VALUES (?, ?, ?)"
         );
         pstmt3->setInt(1, student_id);
         pstmt3->setInt(2, sub_id);
         pstmt3->setInt(3, score);
-        pstmt3->setInt(4, score);
         pstmt3->execute();
 
         delete pstmt3;
@@ -438,10 +436,11 @@ void DatabaseStorage::viewResults(int student_id) {
 
     try {
         sql::PreparedStatement* pstmt = con->prepareStatement(
-            "SELECT s.subject_name, pr.score "
+            "SELECT s.subject_name, pr.score, pr.attempt_time "
             "FROM Personal_Result pr "
             "JOIN Subject s ON pr.sub_id = s.sub_id "
-            "WHERE pr.student_id = ?"
+            "WHERE pr.student_id = ? "
+            "ORDER BY pr.attempt_time DESC" // Sorts newest to oldest!
         );
         pstmt->setInt(1, student_id);
         sql::ResultSet* res = pstmt->executeQuery();
@@ -452,7 +451,8 @@ void DatabaseStorage::viewResults(int student_id) {
         while (res->next()) {
             hasResults = true;
             cout << "Subject: " << res->getString("subject_name")
-                << " | Score: " << res->getInt("score") << "\n";
+                << " | Score: " << res->getInt("score")
+                << " | Date: " << res->getString("attempt_time") << "\n";
         }
 
         if (!hasResults) {

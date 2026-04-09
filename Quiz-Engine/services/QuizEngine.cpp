@@ -1,6 +1,9 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <random>
+#include <ctime>
+#include <algorithm>
 using namespace std;
 
 // Adjust these include paths if your folders are structured differently
@@ -48,128 +51,156 @@ Quiz QuizEngine::createQuiz(string& subject) {
 }
 
 void QuizEngine::runQuiz(int student_id) {
-	string subject;
+    string subject;
+    Quiz quiz = createQuiz(subject);
+    vector<Question> all = quiz.getQuestion();
 
-	Quiz quiz = createQuiz(subject);
+    if (all.empty()) {
+        cout << "\n[!] No questions found for this subject. Returning to Dashboard.\n";
+        return;
+    }
 
-	// Creates a dummy user object (just to satisfy the Attempt constructor)
-	User user("Student");
-	Attempt attempt(user, quiz);
+    // Split into Easy / Medium / Hard buckets
+    vector<Question> E, M, H;
+    for (auto& q : all) {
+        if (q.getdifficulty() == 1) E.push_back(q);
+        else if (q.getdifficulty() == 2) M.push_back(q);
+        else H.push_back(q);
+    }
 
-	int currentDifficulty;
-	int e = 0, m = 0, h = 0; // Indexes for easy, medium, and hard question vectors
+    mt19937 rng(time(nullptr));
 
-	vector<Question> easy, medium, hard;
-	vector<Question> allQuestions = quiz.getQuestion();
+    // Remove and return a random question from a pool
+    auto pick = [&](vector<Question>& pool) {
+        int i = rng() % pool.size();
+        Question q = pool[i];
+        pool.erase(pool.begin() + i);
+        return q;
+        };
 
-	// Basic safety check so it doesn't crash if the subject doesn't exist
-	if (allQuestions.empty()) {
-		cout << "\n[!] No questions found for this subject. Returning to Dashboard.\n";
-		return;
-	}
+    // Helper to safely remove a question from a bucket using its Database ID
+    auto removeQ = [&](vector<Question>& pool, Question target) {
+        auto it = find_if(pool.begin(), pool.end(), [&](Question& q) {
+            return q.getId() == target.getId();
+            });
+        if (it != pool.end()) pool.erase(it);
+        };
 
-	cout << "\nEnter the difficulty level you want to start with (1 for Easy, 2 for Medium, 3 for Hard): ";
-	cin >> currentDifficulty;
+    // Use your real User and Attempt classes
+    User user("Student");
+    Attempt attempt(user, quiz);
+    int score = 0;
+    bool fallback = false;
 
-	// Filter questions based on difficulty level
-	for (auto& q : allQuestions) {
-		if (q.getdifficulty() == 1) {
-			easy.push_back(q);
-		}
-		else if (q.getdifficulty() == 2) {
-			medium.push_back(q);
-		}
-		else {
-			hard.push_back(q);
-		}
-	}
+    // Lambda to ask a question, record the Database Option ID, and check if it's correct
+    auto ask = [&](Question q, int idx, bool random) -> bool {
+        const char* label[] = { "Easy", "Medium", "Hard" };
 
-	int totalQuestion = allQuestions.size();
+        cout << "\n------------------------------------------------";
+        cout << "\nQuestion " << idx + 1 << " of " << all.size() << " [" << label[q.getdifficulty() - 1] << "]"
+            << (random ? " (Random Fallback)" : "") << "\n" << q.getText() << "\n\n";
 
-	for (int i = 0; i < totalQuestion; i++) {
-		Question currentQuestion = allQuestions[0]; // temporary placeholder
+        vector<string> opts = q.getOption();
+        for (int j = 0; j < (int)opts.size(); j++) {
+            cout << "  " << j + 1 << ". " << opts[j] << "\n";
+        }
 
-		// Pull the question based on the current adaptive difficulty
-		if (currentDifficulty == 1 && e < easy.size()) {
-			currentQuestion = easy[e++];
-		}
-		else if (currentDifficulty == 2 && m < medium.size()) {
-			currentQuestion = medium[m++];
-		}
-		else if (currentDifficulty == 3 && h < hard.size()) {
-			currentQuestion = hard[h++];
-		}
-		else {
-			// Fallback! If we run out of questions in the current difficulty tier, 
-			// give them whatever is left.
-			if (m < medium.size()) {
-				currentQuestion = medium[m++];
-			}
-			else if (h < hard.size()) {
-				currentQuestion = hard[h++];
-			}
-			else if (e < easy.size()) {
-				currentQuestion = easy[e++];
-			}
-			else {
-				break; // No more questions available
-			}
-		}
+        int ans;
+        cout << "\nEnter your answer: ";
+        cin >> ans;
 
-		cout << "\n------------------------------------------------";
-		cout << "\nQuestion " << (i + 1) << " of " << totalQuestion << " (Difficulty: " << currentQuestion.getdifficulty() << "):" << endl;
-		cout << currentQuestion.getText() << "\n\n";
+        // --- DB INTEGRATION: Map answer to real Option ID ---
+        int selectedOptId = q.getOptionId(ans - 1);
+        attempt.submitAnswer(idx, selectedOptId);
 
-		vector<string> options = currentQuestion.getOption();
-		for (int j = 0; j < options.size(); j++) {
-			cout << "  " << (j + 1) << ". " << options[j] << endl;
-		}
+        bool correct = q.isCorrect(selectedOptId);
 
-		// Take user input 
-		int userAnswer;
-		cout << "\nEnter your answer: ";
-		cin >> userAnswer;
+        if (correct) {
+            cout << "✅ Correct!\n";
+            score++;
+        }
+        else {
+            cout << "❌ Incorrect.\n";
+        }
+        return correct;
+        };
 
-		// --- DB INTEGRATION: MAP UI INDEX TO DB PRIMARY KEY ---
-		int selectedOptId = currentQuestion.getOptionId(userAnswer - 1);
-		attempt.submitAnswer(i, selectedOptId);
+    // First question is completely random from all available questions
+    vector<Question> allPool = all;
+    Question current = pick(allPool);
 
-		// Adaptive Scaling Logic
-		if (currentQuestion.isCorrect(selectedOptId)) {
-			cout << "✅ Correct!\n";
-			if (currentDifficulty < 3) {
-				currentDifficulty++;
-			}
-		}
-		else {
-			cout << "❌ Incorrect.\n";
-			if (currentDifficulty > 1) {
-				currentDifficulty--;
-			}
-		}
+    // Remove the first picked question from its respective bucket
+    if (current.getdifficulty() == 1) removeQ(E, current);
+    else if (current.getdifficulty() == 2) removeQ(M, current);
+    else removeQ(H, current);
 
-		// Clamp difficulty boundaries just to be safe
-		if (currentDifficulty < 1) currentDifficulty = 1;
-		if (currentDifficulty > 3) currentDifficulty = 3;
-	}
+    bool correct = ask(current, 0, true);
 
-	// Calculate Final Score
-	int score = score::scoreCalculate(attempt);
+    for (int i = 1; i < (int)all.size(); i++) {
+        // Once fallback is triggered, the rest of the quiz is random from whatever is left
+        if (fallback) {
+            vector<Question> left;
+            left.insert(left.end(), E.begin(), E.end());
+            left.insert(left.end(), M.begin(), M.end());
+            left.insert(left.end(), H.begin(), H.end());
 
-	cout << "\n================================================";
-	cout << "\n                  QUIZ RESULT                   ";
-	cout << "\n================================================";
-	cout << "\n Final Score: " << score << " / " << totalQuestion << "\n";
+            if (left.empty()) break;
 
-	// --- DB INTEGRATION: SAVE ATTEMPT ---
-	// Fetch the subject ID based on the string the user typed in
-	int sub_id = storage.getSubjectId(subject);
+            Question q = pick(left);
+            if (q.getdifficulty() == 1) removeQ(E, q);
+            else if (q.getdifficulty() == 2) removeQ(M, q);
+            else removeQ(H, q);
 
-	if (sub_id != -1) {
-		// Save to MySQL!
-		storage.saveAttempt(attempt, student_id, sub_id, score);
-	}
-	else {
-		cout << "\n[!] Error finding subject in database. Attempt not saved.\n";
-	}
+            correct = ask(q, i, true);
+            continue;
+        }
+
+        int d = current.getdifficulty();
+
+        // Pick the next bucket(s) based on your adaptive rules
+        vector<Question*> choices;
+        if (correct) {
+            if (d == 1 && !M.empty()) { for (auto& q : M) choices.push_back(&q); }
+            else if (d == 2 && !H.empty()) { for (auto& q : H) choices.push_back(&q); }
+            else if (!M.empty()) { for (auto& q : M) choices.push_back(&q); }
+        }
+        else {
+            if (d == 3 && !M.empty()) { for (auto& q : M) choices.push_back(&q); }
+            else if (d == 2 && !E.empty()) { for (auto& q : E) choices.push_back(&q); }
+            else if (!M.empty()) { for (auto& q : M) choices.push_back(&q); }
+        }
+
+        // If we run out of valid questions in those buckets, trigger fallback
+        if (choices.empty()) {
+            fallback = true;
+            i--;
+            continue;
+        }
+
+        // Pick randomly from valid choices
+        Question next = *choices[rng() % choices.size()];
+
+        if (next.getdifficulty() == 1) removeQ(E, next);
+        else if (next.getdifficulty() == 2) removeQ(M, next);
+        else removeQ(H, next);
+
+        current = next;
+        correct = ask(current, i, false);
+    }
+
+    // Print Results
+    cout << "\n================================================";
+    cout << "\n                  QUIZ RESULT                   ";
+    cout << "\n================================================";
+    cout << "\n Final Score: " << score << " / " << (int)all.size() << "\n";
+
+    // --- DB INTEGRATION: Dynamically Save Attempt ---
+    int sub_id = storage.getSubjectId(subject);
+
+    if (sub_id != -1) {
+        storage.saveAttempt(attempt, student_id, sub_id, score);
+    }
+    else {
+        cout << "\n[!] Error finding subject in database. Attempt not saved.\n";
+    }
 }
