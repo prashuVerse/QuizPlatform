@@ -1,32 +1,45 @@
 #include <iostream>
 #include <vector>
 #include <string>
-
 using namespace std;
 
-#include "Quiz.h"
-#include "DatabaseStorage.h"
-#include "Score.h"
+// Adjust these include paths if your folders are structured differently
+#include "../core/Quiz.h"
+#include "../core/question.h"
+#include "../core/User.h"       
+#include "../core/Attempt.h"    
+#include "../core/Score.h"
+#include "../persistence/DatabaseStorage.h"
 #include "QuizEngine.h"
-#include "question.h"
-#include "User.h"       
-#include "Attempt.h"    
-#include <mysql/jdbc.h> // Mysql connector
 
-// Keeps only the Quiz class method (Question methods are safely inside question.cpp now)
+// Note: If you have a Quiz.cpp file, this method belongs there. 
+// I am keeping it here because it was in your original snippet!
 vector<Question> Quiz::getQuestion() const {
 	return questions;
 }
 
+Quiz::Quiz(vector<Question> questions, int timeLimit) {
+	this->questions = questions;
+	this->timeLimit = timeLimit;
+}
+
+User::User(string userName) {
+	this->userName = userName;
+}
+// ------------------------------------------
+
 Quiz QuizEngine::createQuiz(string& subject) {
 	int no_of_questions;
 
-	cout << "Enter the Subject for the quiz: ";
+	// Ask for the subject and number of questions to create the quiz
+	cout << "\nEnter the Subject for the quiz: ";
 	cin >> subject;
 
 	cout << "How many questions do you want in the quiz? ";
 	cin >> no_of_questions;
 
+	// Calls the database file, hands it the subject and the number, 
+	// and the database hands back a filled vector of actual questions from MySQL!
 	vector<Question> quizQuestions = storage.loadQuestions(subject, no_of_questions);
 
 	int timeLimit = 60;
@@ -34,12 +47,13 @@ Quiz QuizEngine::createQuiz(string& subject) {
 	return quiz;
 }
 
-void QuizEngine::runQuiz() {
-	string Subject;
-	Quiz quiz = createQuiz(Subject);
+void QuizEngine::runQuiz(int student_id) {
+	string subject;
 
-	// Using "Student1" to match the database dummy data you inserted earlier
-	User user("Student1");
+	Quiz quiz = createQuiz(subject);
+
+	// Creates a dummy user object (just to satisfy the Attempt constructor)
+	User user("Student");
 	Attempt attempt(user, quiz);
 
 	int currentDifficulty;
@@ -50,11 +64,11 @@ void QuizEngine::runQuiz() {
 
 	// Basic safety check so it doesn't crash if the subject doesn't exist
 	if (allQuestions.empty()) {
-		cout << "\nNo questions found. Exiting quiz.\n";
+		cout << "\n[!] No questions found for this subject. Returning to Dashboard.\n";
 		return;
 	}
 
-	cout << "Enter the difficulty level you want to start with (1 for Easy, 2 for Medium, 3 for Hard): ";
+	cout << "\nEnter the difficulty level you want to start with (1 for Easy, 2 for Medium, 3 for Hard): ";
 	cin >> currentDifficulty;
 
 	// Filter questions based on difficulty level
@@ -73,8 +87,9 @@ void QuizEngine::runQuiz() {
 	int totalQuestion = allQuestions.size();
 
 	for (int i = 0; i < totalQuestion; i++) {
-		Question currentQuestion = allQuestions[0];
+		Question currentQuestion = allQuestions[0]; // temporary placeholder
 
+		// Pull the question based on the current adaptive difficulty
 		if (currentDifficulty == 1 && e < easy.size()) {
 			currentQuestion = easy[e++];
 		}
@@ -85,6 +100,8 @@ void QuizEngine::runQuiz() {
 			currentQuestion = hard[h++];
 		}
 		else {
+			// Fallback! If we run out of questions in the current difficulty tier, 
+			// give them whatever is left.
 			if (m < medium.size()) {
 				currentQuestion = medium[m++];
 			}
@@ -99,17 +116,18 @@ void QuizEngine::runQuiz() {
 			}
 		}
 
-		cout << "\nQuestion (Difficulty: " << currentQuestion.getdifficulty() << "):" << endl;
-		cout << currentQuestion.getText() << "\n";
+		cout << "\n------------------------------------------------";
+		cout << "\nQuestion " << (i + 1) << " of " << totalQuestion << " (Difficulty: " << currentQuestion.getdifficulty() << "):" << endl;
+		cout << currentQuestion.getText() << "\n\n";
 
 		vector<string> options = currentQuestion.getOption();
 		for (int j = 0; j < options.size(); j++) {
-			cout << (j + 1) << ". " << options[j] << endl;
+			cout << "  " << (j + 1) << ". " << options[j] << endl;
 		}
 
 		// Take user input 
 		int userAnswer;
-		cout << "Enter your answer: ";
+		cout << "\nEnter your answer: ";
 		cin >> userAnswer;
 
 		// --- DB INTEGRATION: MAP UI INDEX TO DB PRIMARY KEY ---
@@ -118,19 +136,19 @@ void QuizEngine::runQuiz() {
 
 		// Adaptive Scaling Logic
 		if (currentQuestion.isCorrect(selectedOptId)) {
-			cout << "Correct!\n";
+			cout << "✅ Correct!\n";
 			if (currentDifficulty < 3) {
 				currentDifficulty++;
 			}
 		}
 		else {
-			cout << "Incorrect.\n";
+			cout << "❌ Incorrect.\n";
 			if (currentDifficulty > 1) {
 				currentDifficulty--;
 			}
 		}
 
-		// Clamp difficulty boundaries
+		// Clamp difficulty boundaries just to be safe
 		if (currentDifficulty < 1) currentDifficulty = 1;
 		if (currentDifficulty > 3) currentDifficulty = 3;
 	}
@@ -138,13 +156,20 @@ void QuizEngine::runQuiz() {
 	// Calculate Final Score
 	int score = score::scoreCalculate(attempt);
 
-	cout << "\n===== QUIZ RESULT =====\n";
-	cout << "Score: " << score << " / " << totalQuestion << endl;
+	cout << "\n================================================";
+	cout << "\n                  QUIZ RESULT                   ";
+	cout << "\n================================================";
+	cout << "\n Final Score: " << score << " / " << totalQuestion << "\n";
 
 	// --- DB INTEGRATION: SAVE ATTEMPT ---
-	// Hardcoded for testing. Matches student_id=1 and sub_id=1 ('DBMS') from your DB.
-	int student_id = 1;
-	int sub_id = 1;
+	// Fetch the subject ID based on the string the user typed in
+	int sub_id = storage.getSubjectId(subject);
 
-	storage.saveAttempt(attempt, student_id, sub_id, score);
+	if (sub_id != -1) {
+		// Save to MySQL!
+		storage.saveAttempt(attempt, student_id, sub_id, score);
+	}
+	else {
+		cout << "\n[!] Error finding subject in database. Attempt not saved.\n";
+	}
 }

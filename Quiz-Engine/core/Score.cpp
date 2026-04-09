@@ -1,7 +1,7 @@
 #include "Score.h"
 
 // FIX: Capitalized class name
-int Score::scoreCalculate(const Attempt& attempt) {
+int score::scoreCalculate(const Attempt& attempt) {
     int score = 0;
 
     const std::vector<int>& answers = attempt.getAllAnswers();

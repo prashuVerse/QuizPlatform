@@ -1,4 +1,3 @@
-//interface for question
 #pragma once
 #include <string>
 #include <vector>
@@ -11,14 +10,17 @@ private:
     int difficulty;
     string text;
     vector<string> options;
-    int correctIndex;
+    vector<int> optionIds;  // NEW: Added this
+    int correctOptId;       // NEW: Added this
 
 public:
-    Question(string id,string subject,int difficulty,string text, vector<string> options, int correctIndex);
+    // NEW: Updated constructor to match .cpp
+    Question(string id, string subject, int difficulty, string text, vector<string> options, vector<int> optionIds, int correctOptId);
 
-    bool isCorrect(int correctIndex) const;
-	int getdifficulty() const;
+    bool isCorrect(int selectedOptId) const;
+    int getdifficulty() const;
     vector<string> getOption() const;
     string getText() const;
+    string getId() const;             // NEW: Added this
+    int getOptionId(int index) const; // NEW: Added this
 };
-

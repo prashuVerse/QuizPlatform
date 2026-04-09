@@ -1,15 +1,15 @@
-#pragma once
+#pragma once //Protects the file from being included twice and causing errors.
 
 #include <vector>
-#include "Quiz.h"
-#include "Attempt.h"
-#include "DatabaseStorage.h"
+#include "../core/Quiz.h"
+#include "../core/Attempt.h"
+#include "../persistence/DatabaseStorage.h"
 
 class QuizEngine {
 private:
-    DatabaseStorage storage;
-
+	DatabaseStorage storage; // Responsible for all database interactions, such as loading questions and saving attempts.
+      
 public:
-    void runQuiz();
-    Quiz createQuiz(std::string& subject);
+    void runQuiz(int student_id); //main start button for the quiz
+    Quiz createQuiz(std::string& subject); // A helper function that builds the quiz before it starts running.
 };
