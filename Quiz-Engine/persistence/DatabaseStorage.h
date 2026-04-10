@@ -27,5 +27,6 @@ public:
 	void addQuestion();
 	void viewQuestions();
 	void viewResults(int student_id);
+	void showAvailableSubjects();
 
 };

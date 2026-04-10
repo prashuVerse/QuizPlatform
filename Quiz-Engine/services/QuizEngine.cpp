@@ -34,6 +34,7 @@ User::User(string userName) {
 Quiz QuizEngine::createQuiz(string& subject) {
 	int no_of_questions;
 
+    storage.showAvailableSubjects();
 	// Ask for the subject and number of questions to create the quiz
 	cout << "\nEnter the Subject for the quiz: ";
 	cin >> subject;
@@ -86,19 +87,19 @@ void QuizEngine::runQuiz(int student_id) {
         if (it != pool.end()) pool.erase(it);
         };
 
-    // Use your real User and Attempt classes
     User user("Student");
     Attempt attempt(user, quiz);
     int score = 0;
     bool fallback = false;
 
     // Lambda to ask a question, record the Database Option ID, and check if it's correct
-    auto ask = [&](Question q, int idx, bool random) -> bool {
+    // (Removed the 'random' parameter entirely, UI is clean now)
+    auto ask = [&](Question q, int idx) -> bool {
         const char* label[] = { "Easy", "Medium", "Hard" };
 
         cout << "\n------------------------------------------------";
-        cout << "\nQuestion " << idx + 1 << " of " << all.size() << " [" << label[q.getdifficulty() - 1] << "]"
-            << (random ? " (Random Fallback)" : "") << "\n" << q.getText() << "\n\n";
+        cout << "\nQuestion " << idx + 1 << " of " << all.size() << " [" << label[q.getdifficulty() - 1] << "]\n";
+        cout << q.getText() << "\n\n";
 
         vector<string> opts = q.getOption();
         for (int j = 0; j < (int)opts.size(); j++) {
@@ -109,19 +110,17 @@ void QuizEngine::runQuiz(int student_id) {
         cout << "\nEnter your answer: ";
         cin >> ans;
 
-        // --- DB INTEGRATION: Map answer to real Option ID ---
+        // DB INTEGRATION: Map answer to real Option ID
         int selectedOptId = q.getOptionId(ans - 1);
         attempt.submitAnswer(idx, selectedOptId);
 
         bool correct = q.isCorrect(selectedOptId);
 
+        // SILENT GRADING: No cout statements here!
         if (correct) {
-            cout << "✅ Correct!\n";
             score++;
         }
-        else {
-            cout << "❌ Incorrect.\n";
-        }
+
         return correct;
         };
 
@@ -129,15 +128,14 @@ void QuizEngine::runQuiz(int student_id) {
     vector<Question> allPool = all;
     Question current = pick(allPool);
 
-    // Remove the first picked question from its respective bucket
     if (current.getdifficulty() == 1) removeQ(E, current);
     else if (current.getdifficulty() == 2) removeQ(M, current);
     else removeQ(H, current);
 
-    bool correct = ask(current, 0, true);
+    bool correct = ask(current, 0);
 
     for (int i = 1; i < (int)all.size(); i++) {
-        // Once fallback is triggered, the rest of the quiz is random from whatever is left
+
         if (fallback) {
             vector<Question> left;
             left.insert(left.end(), E.begin(), E.end());
@@ -151,26 +149,50 @@ void QuizEngine::runQuiz(int student_id) {
             else if (q.getdifficulty() == 2) removeQ(M, q);
             else removeQ(H, q);
 
-            correct = ask(q, i, true);
+            correct = ask(q, i);
             continue;
         }
 
         int d = current.getdifficulty();
-
-        // Pick the next bucket(s) based on your adaptive rules
         vector<Question*> choices;
+
+        // --- YOUR EXACT ADAPTIVE RULES ---
         if (correct) {
-            if (d == 1 && !M.empty()) { for (auto& q : M) choices.push_back(&q); }
-            else if (d == 2 && !H.empty()) { for (auto& q : H) choices.push_back(&q); }
-            else if (!M.empty()) { for (auto& q : M) choices.push_back(&q); }
+            if (d == 1) {
+                // Easy & Correct -> Medium or Hard
+                for (auto& q : M) choices.push_back(&q);
+                for (auto& q : H) choices.push_back(&q);
+            }
+            else if (d == 2) {
+                // Medium & Correct -> Hard
+                for (auto& q : H) choices.push_back(&q);
+            }
+            else if (d == 3) {
+                // Hard & Correct -> Hard (If empty, come down to Medium or Easy)
+                for (auto& q : H) choices.push_back(&q);
+                if (choices.empty()) {
+                    for (auto& q : M) choices.push_back(&q);
+                    for (auto& q : E) choices.push_back(&q);
+                }
+            }
         }
         else {
-            if (d == 3 && !M.empty()) { for (auto& q : M) choices.push_back(&q); }
-            else if (d == 2 && !E.empty()) { for (auto& q : E) choices.push_back(&q); }
-            else if (!M.empty()) { for (auto& q : M) choices.push_back(&q); }
+            if (d == 1) {
+                // Easy & Wrong -> Easy
+                for (auto& q : E) choices.push_back(&q);
+            }
+            else if (d == 2) {
+                // Medium & Wrong -> Easy
+                for (auto& q : E) choices.push_back(&q);
+            }
+            else if (d == 3) {
+                // Hard & Wrong -> Medium or Easy
+                for (auto& q : M) choices.push_back(&q);
+                for (auto& q : E) choices.push_back(&q);
+            }
         }
 
-        // If we run out of valid questions in those buckets, trigger fallback
+        // If we still run out of valid questions after all your rules, THEN trigger fallback
         if (choices.empty()) {
             fallback = true;
             i--;
@@ -185,7 +207,7 @@ void QuizEngine::runQuiz(int student_id) {
         else removeQ(H, next);
 
         current = next;
-        correct = ask(current, i, false);
+        correct = ask(current, i);
     }
 
     // Print Results
@@ -194,7 +216,7 @@ void QuizEngine::runQuiz(int student_id) {
     cout << "\n================================================";
     cout << "\n Final Score: " << score << " / " << (int)all.size() << "\n";
 
-    // --- DB INTEGRATION: Dynamically Save Attempt ---
+    // DB INTEGRATION: Dynamically Save Attempt
     int sub_id = storage.getSubjectId(subject);
 
     if (sub_id != -1) {
