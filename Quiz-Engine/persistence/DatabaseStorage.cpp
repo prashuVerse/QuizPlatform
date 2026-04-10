@@ -441,6 +441,7 @@ void DatabaseStorage::addQuestion() {
     // Get Question Text
     string questText; 
     cout << "Enter Question Text: ";
+
     getline(cin, questText); // getline allows the admin to type spaces in their question! 
 
     // Get the 4 Options

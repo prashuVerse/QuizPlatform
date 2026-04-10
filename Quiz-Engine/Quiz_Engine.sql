@@ -111,42 +111,60 @@ CREATE TABLE Personal_Response (
 );
 
 INSERT INTO USERS (name, email_id, password, mobile_no, role)
-VALUES 
-('Admin1', 'admin1@gmail.com', 'admin123', '9876543210', 'Admin'),
-('Student1', 'stud1@gmail.com', 'stud123', '9123456780', 'Student');
+VALUES ('Admin', 'admin@gmail.com', 'admin123', '9999999999', 'Admin');
 
-INSERT INTO ADMIN (user_id) VALUES(1);
-
-INSERT INTO Student (user_id) VALUES (2);
+INSERT INTO Admin (user_id) VALUES (1);
 
 INSERT INTO Subject (subject_name, start_date, end_date, admin_id)
-VALUES ('DBMS', '2026-01-01', '2026-12-13', 1);
-
-INSERT INTO Questions (quest_txt, sub_id)
 VALUES 
-('What is DBMS?', 1),
-('What is normalization?', 1);
+('DSA', '2026-01-01', '2026-12-31', 1),
+('C++', '2026-01-01', '2026-12-31', 1),
+('Java', '2026-01-01', '2026-12-31', 1);
 
-INSERT INTO Options (quest_id, option_txt, is_correct)
-VALUES
-(1, 'Database system', TRUE),
-(1, 'Operating system', FALSE),
-(2, 'Removing redundancy', TRUE),
-(2, 'Data duplication', FALSE);
+INSERT INTO Questions (quest_txt, sub_id, difficulty) VALUES
+('What is a stack?', 1,1),
+('What is a queue?', 1,1),
+('What is recursion?', 1,2),
+('Time complexity of binary search?', 1,2),
+('What is a linked list?', 1,1),
+('DFS stands for?', 1,1),
+('BFS uses which structure?', 1,2),
+('Worst case of quicksort?', 1,3),
+('What is hashing?', 1,2),
+('Heap is used in?', 1,2);
 
-INSERT INTO Personal_Test (student_id, sub_id)
-VALUES (1, 1);
+INSERT INTO Questions (quest_txt, sub_id, difficulty) VALUES
+('What is OOP?', 2,1),
+('What is a class?', 2,1),
+('Constructor is?', 2,1),
+('Destructor is?', 2,1),
+('What is inheritance?', 2,2),
+('What is polymorphism?', 2,2),
+('STL stands for?', 2,1),
+('Vector is?', 2,1),
+('Pointer is?', 2,1),
+('Reference is?', 2,2);
 
-INSERT INTO Personal_Test_Qs (student_id, sub_id, quest_id)
-VALUES (1, 1,1),
-	   (1,1,2);
-       
-INSERT INTO Personal_Response (student_id, sub_id, quest_id, opt_id)
-VALUES (1, 1,1,1),
-	   (1,1,2,3);
-       
-INSERT INTO Personal_Result (student_id, sub_id, score)
-VALUES (1,1,2);
+INSERT INTO Questions (quest_txt, sub_id, difficulty) VALUES
+('What is JVM?', 3,1),
+('What is JDK?', 3,1),
+('What is JRE?', 3,1),
+('What is inheritance?', 3,2),
+('What is encapsulation?', 3,2),
+('What is abstraction?', 3,2),
+('What is interface?', 3,2),
+('What is exception?', 3,1),
+('What is thread?', 3,2),
+('What is collection?', 3,1);
 
-Select *From Personal_Result;
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE Options;
+SET FOREIGN_KEY_CHECKS = 1;
 
+INSERT INTO Options VALUES
+(NULL,30,'Single object',FALSE),
+(NULL,30,'Group of objects',TRUE),
+(NULL,30,'Array only',FALSE),
+(NULL,30,'None',FALSE);
+
+select *from Options;
